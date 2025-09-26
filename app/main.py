@@ -3,6 +3,8 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from app.models.schemas import ErrorResponse
 from app.services import GeminiClient
 from app.utils import (
@@ -33,16 +35,115 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(limit="50M")
 
+# --------------- 预检请求优化中间件 ---------------
+class OptimizedOptionsMiddleware(BaseHTTPMiddleware):
+    """优化 OPTIONS 预检请求的中间件"""
+    
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            # 对于预检请求，直接返回成功响应，不需要经过完整的路由处理
+            response = Response(status_code=200)
+            # CORS 头部会由 CORSMiddleware 自动添加
+            return response
+        
+        response = await call_next(request)
+        
+        # 为所有响应添加一些有用的头部
+        response.headers["X-API-Version"] = "1.0.2"
+        response.headers["X-Server-Version"] = "hajimi-proxy"
+        
+        return response
+
+# 添加预检请求优化中间件
+app.add_middleware(OptimizedOptionsMiddleware)
+
 # --------------- CORS 中间件 ---------------
-# 如果 ALLOWED_ORIGINS 为空列表，则不允许任何跨域请求
-if settings.ALLOWED_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.ALLOWED_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# 增强的CORS配置，支持更多API接口兼容性
+
+# 确定允许的源
+if settings.CORS_STRICT_MODE and settings.ALLOWED_ORIGINS:
+    cors_origins = settings.ALLOWED_ORIGINS
+elif settings.ALLOWED_ORIGINS:
+    cors_origins = settings.ALLOWED_ORIGINS
+else:
+    cors_origins = ["*"]
+
+# 默认允许的请求头
+default_allow_headers = [
+    "Accept",
+    "Accept-Language", 
+    "Content-Language",
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "X-Request-ID",
+    "X-API-Key",
+    "User-Agent",
+    "Referer",
+    "Origin",
+    "Access-Control-Request-Method",
+    "Access-Control-Request-Headers",
+    # OpenAI API 常用头
+    "OpenAI-Organization",
+    "OpenAI-Project", 
+    "OpenAI-Beta",
+    # 自定义API头
+    "X-Custom-Auth",
+    "X-Client-Version",
+    "X-Session-ID",
+    # 通用API头
+    "Cache-Control",
+    "Pragma",
+    "Expires",
+    # 流式处理相关
+    "Accept-Encoding",
+    "Connection",
+    "Keep-Alive",
+    # 移动端和桌面应用常用
+    "X-Forwarded-For",
+    "X-Real-IP",
+    "X-Client-IP",
+]
+
+# 默认暴露的响应头
+default_expose_headers = [
+    "X-Request-ID",
+    "X-RateLimit-Remaining",
+    "X-RateLimit-Reset",
+    "X-Response-Time",
+    "Content-Length",
+    "Content-Type",
+    "X-API-Version",
+    # OpenAI API 响应头
+    "OpenAI-Model",
+    "OpenAI-Processing-Ms",
+    "OpenAI-Version",
+    # 自定义响应头
+    "X-Cache-Status",
+    "X-Server-Version",
+    # 流式响应相关
+    "Transfer-Encoding",
+    "Connection",
+    # 错误信息相关
+    "X-Error-Code",
+    "X-Error-Message",
+]
+
+# 合并用户自定义的头
+final_allow_headers = list(set(default_allow_headers + settings.CORS_EXTRA_ALLOW_HEADERS))
+final_expose_headers = list(set(default_expose_headers + settings.CORS_EXTRA_EXPOSE_HEADERS))
+
+log("info", f"CORS配置: origins={len(cors_origins)}个, methods={len(settings.CORS_ALLOW_METHODS)}个, allow_headers={len(final_allow_headers)}个, expose_headers={len(final_expose_headers)}个")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=final_allow_headers,
+    expose_headers=final_expose_headers,
+    max_age=settings.CORS_MAX_AGE,
+)
 
 # --------------- 全局实例 ---------------
 load_settings()
