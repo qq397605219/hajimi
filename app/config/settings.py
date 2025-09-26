@@ -91,6 +91,11 @@ MAX_EMPTY_RESPONSES = int(
     os.environ.get("MAX_EMPTY_RESPONSES", "5")
 )  # 默认最多允许5次空响应
 
+# 网络重试配置
+NETWORK_RETRY_ATTEMPTS = int(os.environ.get("NETWORK_RETRY_ATTEMPTS", "3"))  # 网络重试次数
+NETWORK_RETRY_DELAY = float(os.environ.get("NETWORK_RETRY_DELAY", "1.0"))  # 重试延迟（秒）
+NETWORK_BACKOFF_FACTOR = float(os.environ.get("NETWORK_BACKOFF_FACTOR", "2.0"))  # 指数退避因子
+
 # ---------- 以下是其他配置信息 ----------
 
 # 访问限制
@@ -102,6 +107,15 @@ MAX_REQUESTS_PER_DAY_PER_IP = int(os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", 
 API_KEY_DAILY_LIMIT = int(
     os.environ.get("API_KEY_DAILY_LIMIT", "100")
 )  # 默认每个API密钥每24小时可使用100次
+
+# 嵌入功能专用限制
+EMBEDDING_DAILY_LIMIT = int(
+    os.environ.get("EMBEDDING_DAILY_LIMIT", "500")
+)  # 嵌入功能每日限制（通常比对话更宽松）
+EMBEDDING_REQUESTS_PER_MINUTE = int(
+    os.environ.get("EMBEDDING_REQUESTS_PER_MINUTE", "15")
+)  # 嵌入功能每分钟请求限制
+EMBEDDING_DEFAULT_MODEL = os.environ.get("EMBEDDING_DEFAULT_MODEL", "text-embedding-004")
 
 # 模型屏蔽黑名单，格式应为逗号分隔的模型名称集合
 BLOCKED_MODELS = {
@@ -128,10 +142,39 @@ WHITELIST_USER_AGENT = {
 
 # 跨域配置
 # 允许的源列表，逗号分隔，例如 "http://localhost:3000,https://example.com"
+# 如果为空，默认允许所有源（"*"）
 ALLOWED_ORIGINS_STR = os.environ.get("ALLOWED_ORIGINS", "")
 ALLOWED_ORIGINS = [
     origin.strip() for origin in ALLOWED_ORIGINS_STR.split(",") if origin.strip()
 ]
+
+# CORS增强配置
+# 是否启用严格CORS模式（仅允许指定的源）
+CORS_STRICT_MODE = os.environ.get("CORS_STRICT_MODE", "false").lower() in ["true", "1", "yes"]
+
+# 允许的HTTP方法，逗号分隔
+CORS_ALLOW_METHODS_STR = os.environ.get("CORS_ALLOW_METHODS", "GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH")
+CORS_ALLOW_METHODS = [
+    method.strip().upper() for method in CORS_ALLOW_METHODS_STR.split(",") if method.strip()
+]
+
+# 额外允许的请求头，逗号分隔（会添加到默认头列表中）
+CORS_EXTRA_ALLOW_HEADERS_STR = os.environ.get("CORS_EXTRA_ALLOW_HEADERS", "")
+CORS_EXTRA_ALLOW_HEADERS = [
+    header.strip() for header in CORS_EXTRA_ALLOW_HEADERS_STR.split(",") if header.strip()
+]
+
+# 额外暴露的响应头，逗号分隔（会添加到默认头列表中）
+CORS_EXTRA_EXPOSE_HEADERS_STR = os.environ.get("CORS_EXTRA_EXPOSE_HEADERS", "")
+CORS_EXTRA_EXPOSE_HEADERS = [
+    header.strip() for header in CORS_EXTRA_EXPOSE_HEADERS_STR.split(",") if header.strip()
+]
+
+# 预检请求缓存时间（秒）
+CORS_MAX_AGE = int(os.environ.get("CORS_MAX_AGE", "86400"))  # 默认24小时
+
+# 是否允许凭据（cookies、authorization headers等）
+CORS_ALLOW_CREDENTIALS = os.environ.get("CORS_ALLOW_CREDENTIALS", "true").lower() in ["true", "1", "yes"]
 
 # ---------- 运行时全局信息，无需修改 ----------
 
